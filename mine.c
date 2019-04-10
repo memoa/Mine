@@ -16,303 +16,314 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#define MAX_VRSTA 16
-#define MAX_KOLONA 76
-#define MASKA_OTVORENO 0x0f
-#define MASKA_MINA 0x10
-#define MASKA_ZASTAVICA 0x20
-#define MASKA_OTVARANJE 0x40
-#define ZNAK_PRAZNO_NEOTVORENO '?'
-#define ZNAK_ZASTAVICA '#'
-#define ZNAK_POGRESNA_ZASTAVICA 'x'
-#define ZNAK_MINA '*'
-#define ZNAK_OTVORENA_MINA '%'
+#include <time.h>
 
-char **matrica; /* dinamicka matrica polja */
-int br_vrsta, br_kolona, br_mina, br_otv_polja, br_zastavica, mina;
+#define MAX_ROWS 16
+#define MAX_COLUMNS 76
+#define MASK_OPENED 0x0f
+#define MASK_MINE 0x10
+#define MASK_FLAG 0x20
+#define MASK_OPENING 0x40
+#define SIGN_EMPTY_NOT_OPENED '?'
+#define SIGN_FLAG '#'
+#define SIGN_WRONG_FLAG 'x'
+#define SIGN_MINE '*'
+#define SIGN_OPENED_MINE '%'
 
-void stvaranje_matrice() {
+char **matrix; /* fields matrix */
+int n_rows, n_columns, n_mines, n_opened_fields, n_flags, mina;
+
+void create_matrix() {
     int i;
-    if (!(matrica= malloc(br_vrsta*sizeof(char*)))) {
-        printf("***Greska! Problem s memorijom!***\n"); exit(1);
+    if (!(matrix = malloc(n_rows * sizeof(char*)))) {
+        printf("*** Error! Memory Allocation Problem! ***\n"); exit(1);
     }
-    for (i=0; i<br_vrsta; i++)
-        if (!(matrica[i]= malloc(br_kolona*sizeof(char)))) {
-            printf("***Greska! Problem s memorijom!***\n"); exit(1);
+    for (i = 0; i < n_rows; i++)
+        if (!(matrix[i] = malloc(n_columns * sizeof(char)))) {
+            printf("*** Error! Memory Allocation Problem! ***\n"); exit(1);
         }
 }
 
-void unistavanje_matrice() {
+void destroy_matrix() {
     int i;
-    for (i=0; i<br_vrsta; i++)
-        free(matrica[i]);
-    free(matrica);
+    for (i = 0; i < n_rows; i++)
+        free(matrix[i]);
+    free(matrix);
 }
 
-void inicijalizacija_matrice() {
+void initialization_matrix() {
     int i, j;
-    for (i=0; i<br_vrsta; i++)
-        for (j=0; j<br_kolona; j++)
-            matrica[i][j]=MASKA_OTVORENO;
+    for (i = 0; i < n_rows; i++)
+        for (j = 0; j < n_columns; j++)
+            matrix[i][j] = MASK_OPENED;
 }
 
-int ima_mina(int x, int y) {
-    if ((matrica[x][y])&MASKA_MINA) return 1;
+int found_mine(int row, int col) {
+    if ((matrix[row][col]) & MASK_MINE) return 1;
     else return 0;
 }
 
-void postavi_minu(int x, int y) {
-    matrica[x][y]|=MASKA_MINA;
+void set_mine(int row, int col) {
+    matrix[row][col] |= MASK_MINE;
 }
 
-int ima_zastavica(int x, int y) {
-    if ((matrica[x][y])&MASKA_ZASTAVICA) return 1;
+int found_flag(int row, int col) {
+    if ((matrix[row][col]) & MASK_FLAG) return 1;
     else return 0;
 }
 
-void promeni_zastavicu(int x, int y) {
-    if (ima_zastavica(x, y)) {
-        matrica[x][y]&=~MASKA_ZASTAVICA; br_zastavica--;
+void toggle_flag(int row, int col) {
+    if (found_flag(row, col)) {
+        matrix[row][col] &= ~MASK_FLAG; n_flags--;
     } else {
-        matrica[x][y]|=MASKA_ZASTAVICA; br_zastavica++;
+        matrix[row][col] |= MASK_FLAG; n_flags++;
     }
 }
 
-int ima_otvaranje(int x, int y) {
-    if (matrica[x][y]&MASKA_OTVARANJE) return 1;
+int found_opening(int row, int col) {
+    if (matrix[row][col] & MASK_OPENING) return 1;
     else return 0;
 }
 
-void postavi_otvaranje(int x, int y) {
-    matrica[x][y]|=MASKA_OTVARANJE;
+void set_opening(int row, int col) {
+    matrix[row][col] |= MASK_OPENING;
 }
 
-void ukloni_otvaranje(int x, int y) {
-    matrica[x][y]&=~MASKA_OTVARANJE;
+void remove_opening(int row, int col) {
+    matrix[row][col] &= ~MASK_OPENING;
 }
 
-int polje_otvoreno(int x, int y) {
-    if ((matrica[x][y]&MASKA_OTVORENO)<9) return 1;
+int field_opened(int row, int col) {
+    if ((matrix[row][col] & MASK_OPENED) < 9) return 1;
     else return 0;
 }
 
-void obelezi_polje(int x, int y, char broj) {
-    broj&=MASKA_OTVORENO;
-    matrica[x][y]&=~MASKA_OTVORENO;
-    matrica[x][y]|=broj;
+void mark_field(int row, int col, char broj) {
+    broj &= MASK_OPENED;
+    matrix[row][col] &= ~MASK_OPENED;
+    matrix[row][col] |= broj;
 }
 
-int procitaj_broj_polja(int x, int y) {
-    return matrica[x][y]&MASKA_OTVORENO;
+int read_n_field(int row, int col) {
+    return matrix[row][col] & MASK_OPENED;
 }
 
-void postavljanje_mina() {
+void set_mines() {
     int i, j, r, rj;
     srand((unsigned)time(NULL));
-    for (i=0; i<br_mina; i++) {
-        r=rand()%(br_vrsta*br_kolona);
-        for (j=0; j<br_vrsta*br_kolona; j++) {
-            rj= (r+j)%(br_vrsta*br_kolona);
-            if (!ima_mina(rj/br_kolona, rj%br_kolona)) {
-                postavi_minu(rj/br_kolona, rj%br_kolona); break;
+    for (i = 0; i < n_mines; i++) {
+        r = rand() % (n_rows * n_columns);
+        for (j = 0; j < n_rows * n_columns; j++) {
+            rj = (r + j) % (n_rows * n_columns);
+            if (!found_mine(rj / n_columns, rj % n_columns)) {
+                set_mine(rj / n_columns, rj % n_columns); break;
             }
         }
     }
 }
 
-int prebroj_mine (int x, int y) {
-    int i=0;
-    if (x+1<br_vrsta) {
-        if (ima_mina(x+1, y)) i++;
-        if (y+1<br_kolona)
-            if (ima_mina(x+1, y+1)) i++;
+int count_mines (int row, int col) {
+    int count = 0;
+    if (row + 1 < n_rows) {
+        if (found_mine(row + 1, col)) count++;
+        if (col + 1 < n_columns)
+            if (found_mine(row + 1, col + 1)) count++;
     }
-    if (y+1<br_kolona) {
-        if (ima_mina(x, y+1)) i++;
-        if (x-1>=0)
-            if (ima_mina(x-1, y+1)) i++;
+    if (col + 1 < n_columns) {
+        if (found_mine(row, col + 1)) count++;
+        if (row - 1 >= 0)
+            if (found_mine(row - 1, col + 1)) count++;
     }
-    if (x-1>=0) {
-        if (ima_mina(x-1, y)) i++;
-        if (y-1>=0)
-            if (ima_mina(x-1, y-1)) i++;
+    if (row - 1 >= 0) {
+        if (found_mine(row - 1, col)) count++;
+        if (col - 1 >= 0)
+            if (found_mine(row - 1, col - 1)) count++;
     }
-    if (y-1>=0) {
-        if (ima_mina(x, y-1)) i++;
-        if (x+1<br_vrsta)
-            if (ima_mina(x+1, y-1)) i++;
+    if (col - 1 >= 0) {
+        if (found_mine(row, col - 1)) count++;
+        if (row + 1 < n_rows)
+            if (found_mine(row + 1, col - 1)) count++;
     }
-    return i;
+    return count;
 }
 
-int prebroj_zastavice (int x, int y) {
-    int i=0;
-    if (x+1<br_vrsta) {
-        if (ima_zastavica(x+1, y)) i++;
-        if (y+1<br_kolona)
-            if (ima_zastavica(x+1, y+1)) i++;
+int count_flags (int row, int col) {
+    int count = 0;
+    if (row + 1 < n_rows) {
+        if (found_flag(row + 1, col)) count++;
+        if (col + 1 < n_columns)
+            if (found_flag(row + 1, col + 1)) count++;
     }
-    if (y+1<br_kolona) {
-        if (ima_zastavica(x, y+1)) i++;
-        if (x-1>=0)
-            if (ima_zastavica(x-1, y+1)) i++;
+    if (col + 1 < n_columns) {
+        if (found_flag(row, col + 1)) count++;
+        if (row - 1 >= 0)
+            if (found_flag(row - 1, col + 1)) count++;
     }
-    if (x-1>=0) {
-        if (ima_zastavica(x-1, y)) i++;
-        if (y-1>=0)
-            if (ima_zastavica(x-1, y-1)) i++;
+    if (row - 1 >= 0) {
+        if (found_flag(row - 1, col)) count++;
+        if (col - 1 >= 0)
+            if (found_flag(row - 1, col - 1)) count++;
     }
-    if (y-1>=0) {
-        if (ima_zastavica(x, y-1)) i++;
-        if (x+1<br_vrsta)
-            if (ima_zastavica(x+1, y-1)) i++;
+    if (col - 1 >= 0) {
+        if (found_flag(row, col - 1)) count++;
+        if (row + 1 < n_rows)
+            if (found_flag(row + 1, col - 1)) count++;
     }
-    return i;
+    return count;
 }
 
-int otvaraj_okolo (int x, int y) {
-    if (x+1<br_vrsta) {
-        if (otvaranje_polja(x+1, y)) return 1;
-        if (y+1<br_kolona)
-            if (otvaranje_polja(x+1, y+1)) return 1;
-    }
-    if (y+1<br_kolona) {
-        if (otvaranje_polja(x, y+1)) return 1;
-        if (x-1>=0)
-            if (otvaranje_polja(x-1, y+1)) return 1;
-    }
-    if (x-1>=0) {
-        if (otvaranje_polja(x-1, y)) return 1;
-        if (y-1>=0)
-            if (otvaranje_polja(x-1, y-1)) return 1;
-    }
-    if (y-1>=0) {
-        if (otvaranje_polja(x, y-1)) return 1;
-        if (x+1<br_vrsta)
-            if (otvaranje_polja(x+1, y-1)) return 1;
+int open_around (int, int);
+/*
+    Open field, check if there is flag set, check if there is mine, 
+    count mines in surrounding fields. If there are no mines in surrounding field, 
+    then call function 'open_around' to open surrounding fields.
+    Parameters: coordinates, row and column number
+    Returns: 0 if there is flag set or 
+*/
+int open_field(int row, int col) {
+    int n_mines;
+    if (!found_flag(row, col)) {
+        if (!field_opened(row, col)) {
+            if (found_mine(row, col)) {
+                mark_field(row, col, 9); mina = 1; return 1;
+            }
+            n_mines = count_mines(row, col);
+            mark_field(row, col, n_mines);
+            n_opened_fields++;
+            if (n_mines == 0)
+                if (open_around(row, col)) return 1;
+        } else if (field_opened(row, col) && found_opening(row, col)) { /* vec otvoreno polje se moze otvoriti samo ako je naredio korisnik, a ne i rekurzivni poziv ove funkcije */
+            remove_opening(row, col);
+            if (read_n_field(row, col) == count_flags(row, col))
+                if (open_around(row, col)) return 1;
+        }
     }
     return 0;
 }
 
-void prikaz_matrice() {
+/*
+    Open all fields surrounding field specified by coordinates
+
+*/
+int open_around (int row, int col) {
+    if (row + 1 < n_rows) {
+        if (open_field(row + 1, col)) return 1;
+        if (col + 1 < n_columns)
+            if (open_field(row + 1, col + 1)) return 1;
+    }
+    if (col + 1 < n_columns) {
+        if (open_field(row, col + 1)) return 1;
+        if (row - 1 >= 0)
+            if (open_field(row - 1, col + 1)) return 1;
+    }
+    if (row - 1 >= 0) {
+        if (open_field(row - 1, col)) return 1;
+        if (col - 1 >= 0)
+            if (open_field(row - 1, col - 1)) return 1;
+    }
+    if (col - 1 >= 0) {
+        if (open_field(row, col - 1)) return 1;
+        if (row + 1 < n_rows)
+            if (open_field(row + 1, col - 1)) return 1;
+    }
+    return 0;
+}
+
+void display_matrix() {
     int i, j;
     printf("\n  y");
-    for (i=1; i<=br_kolona; i++) /* horizontalni lenjir */
-        if (!(i%5)) printf("%5d", i);
+    for (i = 1; i <= n_columns; i++) /* horizontal ruler */
+        if (!(i % 5)) printf("%5d", i);
     printf("\n x ");
-    for (i=1; i<=br_kolona; i++)
-        if (i%5) putchar(' ');
+    for (i = 1; i <= n_columns; i++)
+        if (i % 5) putchar(' ');
         else putchar('|');
-    for (i=0; i<br_vrsta; i++) {
-        printf("\n%2d ", i+1); /* vertikalni lenjir */
-        for (j=0; j<br_kolona; j++) {
-            if (ima_zastavica(i, j)) {
-                if (mina && !ima_mina(i, j)) putchar(ZNAK_POGRESNA_ZASTAVICA);
-                else putchar(ZNAK_ZASTAVICA);
-            } else if (polje_otvoreno(i, j))
-                putchar((char)procitaj_broj_polja(i, j)+0x30);
-            else { /* neotvorena polja bez zastavice */
-                if (mina && ima_mina(i, j))
-                    if (procitaj_broj_polja(i, j)==9) putchar(ZNAK_OTVORENA_MINA);
-                    else putchar(ZNAK_MINA);
-                else putchar(ZNAK_PRAZNO_NEOTVORENO);
+    for (i = 0; i < n_rows; i++) {
+        printf("\n%2d ", i + 1); /* vertical ruler */
+        for (j = 0; j < n_columns; j++) {
+            if (found_flag(i, j)) {
+                if (mina && !found_mine(i, j)) putchar(SIGN_WRONG_FLAG);
+                else putchar(SIGN_FLAG);
+            } else if (field_opened(i, j))
+                putchar((char)read_n_field(i, j) + 0x30);
+            else { /* unopened fields without flags */
+                if (mina && found_mine(i, j))
+                    if (read_n_field(i, j) == 9) putchar(SIGN_OPENED_MINE);
+                    else putchar(SIGN_MINE);
+                else putchar(SIGN_EMPTY_NOT_OPENED);
             }
         }
     }
     putchar('\n');
 }
 
-void ulaz_koordinata(int *x, int *y) {
+void input_coordinates(int *row, int *col) {
     do {
-        printf("Unesite koordinate (0<x<=%d, 0<y<=%d): ", br_vrsta, br_kolona);
-        scanf("%d%d", x, y);
-    } while (*x<1 || *x>br_vrsta || *y<1 || *y>br_kolona);
-    (*x)--; (*y)--;
+        printf("Enter coordinates (0 < row <= %d, 0 < col <= %d): ", n_rows, n_columns);
+        scanf("%d%d", row, col);
+    } while (*row < 1 || *row > n_rows || *col < 1 || *col > n_columns);
+    (*row)--; (*col)--;
 }
 
-/*  Funkcija vraca 1 ako se otvori mina, time se izlazi iz rekurzivnih
-    poziva ove funkcije, i zavrsava se pogadjanje
-    Inace, funkcija vraca 0 */
-int otvaranje_polja(int x, int y) {
-    int i;
-    if (!ima_zastavica(x, y)) {
-        if (!polje_otvoreno(x, y)) {
-            if (ima_mina(x, y)) {
-                obelezi_polje(x, y, 9); mina=1; return 1;
-            }
-            i=prebroj_mine(x, y);
-            obelezi_polje(x, y, i);
-            br_otv_polja++;
-            if (i==0)
-                if (otvaraj_okolo(x, y)) return 1;
-        } else if (polje_otvoreno(x, y) && ima_otvaranje(x, y)) { /* vec otvoreno polje se moze otvoriti samo ako je naredio korisnik, a ne i rekurzivni poziv ove funkcije */
-            ukloni_otvaranje(x, y);
-            if (procitaj_broj_polja(x, y)==prebroj_zastavice(x, y))
-                if (otvaraj_okolo(x, y)) return 1;
-        }
-    }
-    return 0;
-}
-
-void konzola() {
-    char znak;
-    int x, y;
-    printf("\no-otvori polje z-postavi/ukloni zastavicu l-legenda q-izlaz ");
-    if ((znak=getchar())=='\n')
-        znak=getchar();
-    if (znak=='o' || znak=='O') { /* otvaranje */
-        ulaz_koordinata(&x, &y);
-        if (ima_zastavica(x, y))
-            printf("To polje se ne moze otvoriti zato sto je postavljena zastavica!\n");
+void console() {
+    char c;
+    int row, col;
+    printf("\no-open field z-set/remove flag l-legend q-quit ");
+    if ((c = getchar()) == '\n')
+        c = getchar();
+    if (c == 'o' || c == 'O') { /* opening */
+        input_coordinates(&row, &col);
+        if (found_flag(row, col))
+            printf("That field cannot be opened because it is marked with a flag!\n");
         else {
-            if (polje_otvoreno(x, y) && (!ima_zastavica(x, y)))
-                postavi_otvaranje(x, y);
-            otvaranje_polja(x, y);
+            if (field_opened(row, col) && (!found_flag(row, col)))
+                set_opening(row, col);
+            open_field(row, col);
         }
-    } else if (znak=='z' || znak=='Z') { /* postavljanje/uklanjanje zastavice */
-        ulaz_koordinata(&x, &y);
-        if (polje_otvoreno(x, y))
-            printf("To polje je vec otvoreno. Ne moze se postaviti zastavica!\n");
-        else promeni_zastavicu(x, y);
-    } else if (znak=='q' || znak=='Q') {
-        printf("Uneli ste komandu za izlaz. Kraj programa.\n"); exit(0);
-    } else if (znak=='l' || znak=='L') {
-        printf("\nLegenda\n\n");
-        printf("%c\t-neotvoreno prazno polje\n", ZNAK_PRAZNO_NEOTVORENO);
-        printf("0-8\t-otvoreno prazno polje\n");
-        printf("%c\t-zastavica\n", ZNAK_ZASTAVICA);
-        printf("%c\t-zastavica na pogresnom mestu\n", ZNAK_POGRESNA_ZASTAVICA);
-        printf("%c\t-mina\n", ZNAK_MINA);
-        printf("%c\t-otvorena mina\n\n", ZNAK_OTVORENA_MINA);
-        printf("Za nastavak pritisnuti ENTER ");
+    } else if (c == 'z' || c == 'Z') { /* set/remove flag */
+        input_coordinates(&row, &col);
+        if (field_opened(row, col))
+            printf("That field is already opened. Flag cannot be set there!\n");
+        else toggle_flag(row, col);
+    } else if (c == 'q' || c == 'Q') {
+        printf("Quit command entered. End of program.\n"); exit(0);
+    } else if (c == 'l' || c == 'L') {
+        printf("\nLegend\n\n");
+        printf("%c\t-unopened empty field\n", SIGN_EMPTY_NOT_OPENED);
+        printf("0-8\t-opened empty field\n");
+        printf("%c\t-flag\n", SIGN_FLAG);
+        printf("%c\t-flag on wrong field\n", SIGN_WRONG_FLAG);
+        printf("%c\t-mine\n", SIGN_MINE);
+        printf("%c\t-opened mine\n\n", SIGN_OPENED_MINE);
+        printf("Press ENTER to continue");
         getchar(); getchar();
-    } else printf("Uneli ste pogresnu komandu!\n");
+    } else printf("Wrong command entered!\n");
 }
 
 int main() {
-    char znak;
+    char c;
     do {
-        mina=0; br_otv_polja=0; br_zastavica=0;
+        mina = 0; n_opened_fields = 0; n_flags = 0;
         putchar('\n');
         do {
-            printf("Unesite velicinu matrice (1<m<=%d, 1<n<=%d) i broj mina(0<b<m*n): ", MAX_VRSTA, MAX_KOLONA);
-            scanf("%d%d%d", &br_vrsta, &br_kolona, &br_mina);
-        } while (br_vrsta<=1 || br_vrsta>MAX_VRSTA || br_kolona<=1 || br_kolona>MAX_KOLONA || br_mina<1 || br_mina>=br_vrsta*br_kolona);
-        stvaranje_matrice();
-        inicijalizacija_matrice();
-        postavljanje_mina();
+            printf("Enter matrix dimensions (1 < m <= %d, 1 < n <= %d) and number of mines (0 < b < m * n): ", MAX_ROWS, MAX_COLUMNS);
+            scanf("%d%d%d", &n_rows, &n_columns, &n_mines);
+        } while (n_rows <= 1 || n_rows > MAX_ROWS || n_columns <= 1 || n_columns > MAX_COLUMNS || n_mines < 1 || n_mines >= n_rows * n_columns);
+        create_matrix();
+        initialization_matrix();
+        set_mines();
         do {
-            prikaz_matrice();
-            printf("\nPreostalo je jos %d neobelezenih mina.\n", br_mina-br_zastavica);
-            konzola();
-        } while (!mina && br_otv_polja+br_mina!=br_vrsta*br_kolona);
-        prikaz_matrice();
-        unistavanje_matrice();
-        if (mina) printf("\nZalim, izgubili ste.\n");
-        else printf("\nOtkrili ste sve mine.\n");
-        printf("Zelite li nastaviti (d/n)? ");
-        if ((znak=getchar())=='\n')
-            znak=getchar();
-    } while (znak=='d' || znak=='D');
+            display_matrix();
+            printf("\nStill %d unmarked mines remain.\n", n_mines - n_flags);
+            console();
+        } while (!mina && n_opened_fields + n_mines != n_rows * n_columns);
+        display_matrix();
+        destroy_matrix();
+        if (mina) printf("\nStepped on mine. Game over.\n");
+        else printf("\nCongratulations. Mine field solved.\n");
+        printf("Do you want to continue (d/n)? ");
+        if ((c = getchar()) == '\n')
+            c = getchar();
+    } while (c == 'd' || c == 'D');
     return 0;
 }
